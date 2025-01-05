@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+{% load static %}
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Real-Time Text Editor</title>
+    <script src="https://cdn.jsdelivr.net/npm/quill@2.0.2/dist/quill.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/quill@2.0.2/dist/quill.snow.css" rel="stylesheet">
+<!--    <link rel="stylesheet" type="text/css" href="{% static 'style.css' %}">-->
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f3f3f3;
+            margin: 20px;
+        }
+        #editor {
+            height: 400px; /* Set a fixed height for the editor */
+            background-color: white;
+            border: 1px solid #ccc;
+        }
+    </style>
+</head>
+<body>
+    <h1>Real-Time Text Editor</h1>
+    <h3>GroupName:{{group_name}}</h3>
+    <div id="editor">
+        <h2>Demo Content</h2>
+        <p>Preset build with <code>snow</code> theme, and some common formats.</p>
+
+    </div>
+    {{group_name|json_script:"group-name"}}
+    <script>
+        const quill = new Quill('#editor', {
+            theme: 'snow',
+            modules: {
+                toolbar: [
+                    [{ header: [1, 2, 3, 4, 5, 6, false] }],
+                    [{ list: 'ordered' }, { list: 'bullet' }],
+                    ['bold', 'italic', 'underline'],
+                    [{ color: [] }, { background: [] }],
+                    [{ align: [] }],
+                    ['clean']
+                ]
+            },
+            placeholder: 'Start typing...'
+        });
+        const groupName=JSON.parse(document.getElementById('group-name').textContent)
+<!--        const ws = new WebSocket('ws://127.0.0.1:8000/ws/sc/');-->
+         const ws=new WebSocket('ws://'+window.location.host+'/ws/sc/'+groupName+'/')
+        ws.onopen = () => {
+            console.log('WebSocket connection open...');
+        };
+        var docData = {{ docs_json|safe }};
+        if (docData.content) {
+                quill.clipboard.dangerouslyPasteHTML(docData.content);
+            }
+        quill.on('text-change', (delta, oldDelta, source) => {
+            if (source === 'user') {
+                const content = quill.root.innerHTML;
+                ws.send(JSON.stringify({ msg: content }));
+            }
+        });
+
+        ws.onmessage = (event) => {
+            const data = JSON.parse(event.data);
+            if (data.msg !== quill.root.innerHTML) { // Prevent endless loop
+                quill.root.innerHTML = data.msg;
+            }
+        };
+
+        ws.onerror = (event) => {
+            console.error('WebSocket error occurred:', event);
+        };
+
+        ws.onclose = (event) => {
+            console.log('WebSocket connection closed:', event);
+        };
+    </script>
+</body>
+</html>
